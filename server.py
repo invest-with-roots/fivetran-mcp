@@ -262,7 +262,7 @@ TOOLS = {
         "schema_file": "open-api-definitions/connections/run_setup_tests.json",
         "method": "POST",
         "endpoint": "/v1/connections/{connection_id}/test",
-        "params": ["connection_id"],
+        "params": ["connection_id", "request_body"],
     },
     "create_connect_card": {
         "description": "⚠️ WRITE OPERATION - Confirm with user before calling. Create a connect card token for a connection.",
