@@ -17,9 +17,15 @@ from mcp.types import Tool, TextContent
 # stays a thin diff over upstream. Optional import keeps the server working even
 # if the module is absent.
 try:
-    from census_tools import CENSUS_TOOLS, CENSUS_PARAM_DEFINITIONS, census_request
+    from census_tools import (
+        CENSUS_TOOLS,
+        CENSUS_PARAM_DEFINITIONS,
+        census_request,
+        census_request_all_pages,
+    )
 except ImportError:
-    CENSUS_TOOLS, CENSUS_PARAM_DEFINITIONS, census_request = {}, {}, None
+    CENSUS_TOOLS, CENSUS_PARAM_DEFINITIONS = {}, {}
+    census_request = census_request_all_pages = None
 
 load_dotenv()
 
@@ -1432,6 +1438,8 @@ async def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
 
     # Execute request — route Activations (Census) tools to the Census API.
     if tool_config.get("api") == "census":
+        if tool_config.get("auto_paginate"):
+            return await census_request_all_pages(endpoint)
         return await census_request(method, endpoint, json_body=json_body)
     if tool_config.get("auto_paginate"):
         return await fivetran_request_all_pages(endpoint)

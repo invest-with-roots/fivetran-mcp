@@ -62,6 +62,45 @@ async def census_request(
         return response.json()
 
 
+async def census_request_all_pages(
+    endpoint: str,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """GET all pages from a Census list endpoint and return the combined items.
+
+    Census uses page-based pagination: response has `data` (list) and
+    `pagination.next_page` (None when there are no more pages). Always a GET,
+    so no write-permission check needed.
+    """
+    all_items: list[Any] = []
+    params = dict(params or {})
+    params["per_page"] = 100
+    page = 1
+    async with httpx.AsyncClient() as client:
+        while True:
+            params["page"] = page
+            url = f"{CENSUS_BASE_URL}{endpoint}"
+            response = await client.request(
+                method="GET",
+                url=url,
+                headers=get_census_auth_header(),
+                params=params,
+                timeout=30.0,
+            )
+            response.raise_for_status()
+            result = response.json()
+            data = result.get("data", [])
+            if not isinstance(data, list):
+                # Not a paginated list payload — return the raw response unchanged.
+                return result
+            all_items.extend(data)
+            next_page = (result.get("pagination") or {}).get("next_page")
+            if not next_page:
+                break
+            page = next_page
+    return {"status": "success", "total_records": len(all_items), "data": all_items}
+
+
 # Path params used by Census tools that aren't already in server.py's PARAM_DEFINITIONS.
 CENSUS_PARAM_DEFINITIONS = {
     "sync_id": {"type": "string", "description": "The unique identifier for the Activations (Census) sync"},
@@ -76,6 +115,7 @@ CENSUS_TOOLS = {
         "schema_file": "open-api-definitions/census/census_list_syncs.json",
         "method": "GET",
         "endpoint": "/api/v1/syncs",
+        "auto_paginate": True,
         "api": "census",
     },
     "census_get_sync": {
@@ -92,6 +132,7 @@ CENSUS_TOOLS = {
         "method": "GET",
         "endpoint": "/api/v1/syncs/{sync_id}/sync_runs",
         "params": ["sync_id"],
+        "auto_paginate": True,
         "api": "census",
     },
     "census_list_sources": {
@@ -99,6 +140,7 @@ CENSUS_TOOLS = {
         "schema_file": "open-api-definitions/census/census_list_sources.json",
         "method": "GET",
         "endpoint": "/api/v1/sources",
+        "auto_paginate": True,
         "api": "census",
     },
     "census_get_source": {
@@ -114,6 +156,7 @@ CENSUS_TOOLS = {
         "schema_file": "open-api-definitions/census/census_list_destinations.json",
         "method": "GET",
         "endpoint": "/api/v1/destinations",
+        "auto_paginate": True,
         "api": "census",
     },
     "census_get_destination": {
@@ -130,6 +173,7 @@ CENSUS_TOOLS = {
         "method": "GET",
         "endpoint": "/api/v1/destinations/{destination_id}/objects",
         "params": ["destination_id"],
+        "auto_paginate": True,
         "api": "census",
     },
     "census_list_models": {
@@ -137,6 +181,7 @@ CENSUS_TOOLS = {
         "schema_file": "open-api-definitions/census/census_list_models.json",
         "method": "GET",
         "endpoint": "/api/v1/models",
+        "auto_paginate": True,
         "api": "census",
     },
     "census_trigger_sync": {
