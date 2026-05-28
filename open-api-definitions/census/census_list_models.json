@@ -1,0 +1,13 @@
+{
+  "method": "GET",
+  "path": "/api/v1/models",
+  "base_url": "https://app.getcensus.com",
+  "summary": "List SQL models in the workspace.",
+  "authentication": "Bearer workspace access token (CENSUS_API_TOKEN)",
+  "parameters": [],
+  "responses": {
+    "200": {
+      "description": "Array of model objects under `data`: id, name, query, created_at."
+    }
+  }
+}

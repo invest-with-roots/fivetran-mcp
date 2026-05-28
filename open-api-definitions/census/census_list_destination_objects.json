@@ -1,0 +1,23 @@
+{
+  "method": "GET",
+  "path": "/api/v1/destinations/{destination_id}/objects",
+  "base_url": "https://app.getcensus.com",
+  "summary": "List objects available in a destination.",
+  "authentication": "Bearer workspace access token (CENSUS_API_TOKEN)",
+  "parameters": [
+    {
+      "name": "destination_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+        "type": "string"
+      },
+      "description": "Destination connection identifier"
+    }
+  ],
+  "responses": {
+    "200": {
+      "description": "Array of object descriptors: label, full_name, allows_upsert, supported operations and fields."
+    }
+  }
+}

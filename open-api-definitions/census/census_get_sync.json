@@ -1,0 +1,23 @@
+{
+  "method": "GET",
+  "path": "/api/v1/syncs/{sync_id}",
+  "base_url": "https://app.getcensus.com",
+  "summary": "Get a single sync's configuration and status.",
+  "authentication": "Bearer workspace access token (CENSUS_API_TOKEN)",
+  "parameters": [
+    {
+      "name": "sync_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+        "type": "string"
+      },
+      "description": "Sync identifier"
+    }
+  ],
+  "responses": {
+    "200": {
+      "description": "Sync object: id, label, source_attributes, destination_attributes, mappings, schedule, status."
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "method": "GET",
+  "path": "/api/v1/destinations/{destination_id}",
+  "base_url": "https://app.getcensus.com",
+  "summary": "Get a single destination connection.",
+  "authentication": "Bearer workspace access token (CENSUS_API_TOKEN)",
+  "parameters": [
+    {
+      "name": "destination_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+        "type": "string"
+      },
+      "description": "Destination connection identifier"
+    }
+  ],
+  "responses": {
+    "200": {
+      "description": "Destination object: id, name, type, connection_details."
+    }
+  }
+}

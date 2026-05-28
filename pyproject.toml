@@ -17,4 +17,4 @@ dependencies = [
 fivetran-mcp = "server:main"
 
 [tool.hatch.build.targets.wheel]
-only-include = ["server.py", "open-api-definitions"]
+only-include = ["server.py", "census_tools.py", "open-api-definitions"]

@@ -1,0 +1,13 @@
+{
+  "method": "GET",
+  "path": "/api/v1/sources",
+  "base_url": "https://app.getcensus.com",
+  "summary": "List source connections (warehouses/databases).",
+  "authentication": "Bearer workspace access token (CENSUS_API_TOKEN)",
+  "parameters": [],
+  "responses": {
+    "200": {
+      "description": "Array of source objects under `data`: id, name, type, connection_details."
+    }
+  }
+}

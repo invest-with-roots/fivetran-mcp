@@ -13,6 +13,14 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
+# Activations (formerly Census) support lives in a sibling module so this fork
+# stays a thin diff over upstream. Optional import keeps the server working even
+# if the module is absent.
+try:
+    from census_tools import CENSUS_TOOLS, CENSUS_PARAM_DEFINITIONS, census_request
+except ImportError:
+    CENSUS_TOOLS, CENSUS_PARAM_DEFINITIONS, census_request = {}, {}, None
+
 load_dotenv()
 
 # Credentials are configured in .mcp.json
@@ -1349,6 +1357,10 @@ def build_tool_schema(tool_name: str, tool_config: dict) -> Tool:
     )
 
 
+# Merge in Activations (Census) tools and their path-param definitions.
+TOOLS.update(CENSUS_TOOLS)
+PARAM_DEFINITIONS.update(CENSUS_PARAM_DEFINITIONS)
+
 # Create the MCP server
 server = Server("fivetran")
 
@@ -1418,7 +1430,9 @@ async def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON in request_body: {e}")
 
-    # Execute request
+    # Execute request — route Activations (Census) tools to the Census API.
+    if tool_config.get("api") == "census":
+        return await census_request(method, endpoint, json_body=json_body)
     if tool_config.get("auto_paginate"):
         return await fivetran_request_all_pages(endpoint)
     else:

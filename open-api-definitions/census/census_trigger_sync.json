@@ -1,0 +1,23 @@
+{
+  "method": "POST",
+  "path": "/api/v1/syncs/{sync_id}/trigger",
+  "base_url": "https://app.getcensus.com",
+  "summary": "Manually trigger a sync run. WRITE operation.",
+  "authentication": "Bearer workspace access token (CENSUS_API_TOKEN)",
+  "parameters": [
+    {
+      "name": "sync_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+        "type": "string"
+      },
+      "description": "Sync identifier"
+    }
+  ],
+  "responses": {
+    "200": {
+      "description": "Returns the created sync_run: id, status. Requires FIVETRAN_ALLOW_WRITES=true."
+    }
+  }
+}

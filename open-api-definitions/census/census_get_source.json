@@ -1,0 +1,23 @@
+{
+  "method": "GET",
+  "path": "/api/v1/sources/{source_id}",
+  "base_url": "https://app.getcensus.com",
+  "summary": "Get a single source connection.",
+  "authentication": "Bearer workspace access token (CENSUS_API_TOKEN)",
+  "parameters": [
+    {
+      "name": "source_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+        "type": "string"
+      },
+      "description": "Source connection identifier"
+    }
+  ],
+  "responses": {
+    "200": {
+      "description": "Source object: id, name, type, connection_details, last_test_succeeded."
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "method": "GET",
+  "path": "/api/v1/syncs/{sync_id}/sync_runs",
+  "base_url": "https://app.getcensus.com",
+  "summary": "List recent run history for a sync.",
+  "authentication": "Bearer workspace access token (CENSUS_API_TOKEN)",
+  "parameters": [
+    {
+      "name": "sync_id",
+      "in": "path",
+      "required": true,
+      "schema": {
+        "type": "string"
+      },
+      "description": "Sync identifier"
+    }
+  ],
+  "responses": {
+    "200": {
+      "description": "Array of sync_run objects: id, status, created_at, completed_at, records_processed, records_updated, error_message."
+    }
+  }
+}

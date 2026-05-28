@@ -1,0 +1,13 @@
+{
+  "method": "GET",
+  "path": "/api/v1/destinations",
+  "base_url": "https://app.getcensus.com",
+  "summary": "List destination connections (SaaS apps).",
+  "authentication": "Bearer workspace access token (CENSUS_API_TOKEN)",
+  "parameters": [],
+  "responses": {
+    "200": {
+      "description": "Array of destination objects under `data`: id, name, type, connection_details."
+    }
+  }
+}

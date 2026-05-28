@@ -1,0 +1,13 @@
+{
+  "method": "GET",
+  "path": "/api/v1/syncs",
+  "base_url": "https://app.getcensus.com",
+  "summary": "List all syncs in the workspace.",
+  "authentication": "Bearer workspace access token (CENSUS_API_TOKEN)",
+  "parameters": [],
+  "responses": {
+    "200": {
+      "description": "Array of sync objects under `data`: id, label, source/destination, schedule, status, paused."
+    }
+  }
+}
