@@ -62,22 +62,45 @@ async def census_request(
         return response.json()
 
 
+# Auto-pagination safety bounds.
+# Census list endpoints (notably census_list_sync_runs) can return thousands of
+# records. Aggregating EVERY page makes a single tool call fire dozens of
+# sequential 30s requests, which blows the upstream request timeout and surfaces
+# as a 502 origin_bad_gateway through the MCP proxy — wedging the whole session.
+# We therefore cap the number of pages and surface a `truncated` flag instead of
+# fetching unboundedly. We also stop if `next_page` ever fails to advance, so a
+# misbehaving API response can never spin the loop forever.
+CENSUS_PER_PAGE = 100
+CENSUS_MAX_PAGES = 20  # up to CENSUS_MAX_PAGES * CENSUS_PER_PAGE = 2000 records
+
+
 async def census_request_all_pages(
     endpoint: str,
     params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """GET all pages from a Census list endpoint and return the combined items.
+    """GET pages from a Census list endpoint and return the combined items.
 
     Census uses page-based pagination: response has `data` (list) and
     `pagination.next_page` (None when there are no more pages). Always a GET,
     so no write-permission check needed.
+
+    Bounded by CENSUS_MAX_PAGES (see note above). If more records exist beyond
+    the cap, the result carries `truncated: true` and an explanatory `note`.
     """
     all_items: list[Any] = []
     params = dict(params or {})
-    params["per_page"] = 100
+    params["per_page"] = CENSUS_PER_PAGE
     page = 1
+    seen_pages: set[Any] = set()
+    truncated = False
     async with httpx.AsyncClient() as client:
         while True:
+            # Anti-stall guard: if the API hands back a next_page we've already
+            # fetched (or one that doesn't advance), stop rather than loop forever.
+            if page in seen_pages:
+                break
+            seen_pages.add(page)
+
             params["page"] = page
             url = f"{CENSUS_BASE_URL}{endpoint}"
             response = await client.request(
@@ -94,11 +117,27 @@ async def census_request_all_pages(
                 # Not a paginated list payload — return the raw response unchanged.
                 return result
             all_items.extend(data)
+
             next_page = (result.get("pagination") or {}).get("next_page")
             if not next_page:
                 break
+            if len(seen_pages) >= CENSUS_MAX_PAGES:
+                truncated = True
+                break
             page = next_page
-    return {"status": "success", "total_records": len(all_items), "data": all_items}
+
+    out: dict[str, Any] = {
+        "status": "success",
+        "total_records": len(all_items),
+        "data": all_items,
+    }
+    if truncated:
+        out["truncated"] = True
+        out["note"] = (
+            f"Stopped after {CENSUS_MAX_PAGES} pages ({len(all_items)} records). "
+            "More records exist; narrow the query (e.g. filter by sync) to see the rest."
+        )
+    return out
 
 
 # Path params used by Census tools that aren't already in server.py's PARAM_DEFINITIONS.
