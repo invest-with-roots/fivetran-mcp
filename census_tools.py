@@ -9,6 +9,7 @@ TOOLS/PARAM_DEFINITIONS with a minimal patch, keeping upstream rebases clean.
 Tools are routed to census_request() because their config carries `"api": "census"`.
 """
 
+import json
 import os
 from typing import Any
 
@@ -62,22 +63,77 @@ async def census_request(
         return response.json()
 
 
+# Auto-pagination safety bounds.
+#
+# Census list records are LARGE: each sync carries its full `mappings`,
+# `source_attributes`, and `destination_attributes` (~48 KB/record), so a single
+# 25-record page is ~1.2 MB and all syncs run to several MB. Returning that
+# verbatim blows the MCP response/token limit, and aggregating every page into
+# one payload was the real cause of the 502 origin_bad_gateway (an oversized
+# origin response), not an infinite loop.
+#
+# So we: (1) bound page count, (2) drop heavy nested fields per record — keeping
+# scalars like id/name/status/timestamps; the full objects remain available via
+# the detail tools (census_get_*), and (3) enforce an overall byte budget. Any
+# of these limits sets `truncated`/`fields_omitted_for_size` so the caller knows
+# data was reduced. We also stop if `next_page` fails to advance, so a
+# misbehaving response can never spin the loop forever.
+CENSUS_PER_PAGE = 100
+CENSUS_MAX_PAGES = 20
+CENSUS_HEAVY_FIELD_BYTES = 1024  # drop a record's nested field if it serializes larger than this
+CENSUS_MAX_RESPONSE_BYTES = 300_000  # overall budget for the combined `data`
+
+
+def _slim_record(record: Any) -> tuple[Any, list[str]]:
+    """Drop a record's heavy nested (dict/list) fields; keep scalars + small fields.
+
+    Returns (slimmed_record, dropped_field_names). Non-dict records pass through.
+    """
+    if not isinstance(record, dict):
+        return record, []
+    slim: dict[str, Any] = {}
+    dropped: list[str] = []
+    for key, value in record.items():
+        if isinstance(value, (dict, list)):
+            size = len(json.dumps(value, default=str))
+            if size > CENSUS_HEAVY_FIELD_BYTES:
+                dropped.append(key)
+                continue
+        slim[key] = value
+    return slim, dropped
+
+
 async def census_request_all_pages(
     endpoint: str,
     params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """GET all pages from a Census list endpoint and return the combined items.
+    """GET pages from a Census list endpoint and return slimmed, bounded items.
 
     Census uses page-based pagination: response has `data` (list) and
     `pagination.next_page` (None when there are no more pages). Always a GET,
     so no write-permission check needed.
+
+    Bounded by CENSUS_MAX_PAGES, CENSUS_MAX_RESPONSE_BYTES, and per-record
+    field slimming (see note above). When any bound trims the result, the
+    response carries `truncated: true` / `fields_omitted_for_size` plus a `note`.
     """
     all_items: list[Any] = []
+    dropped_fields: set[str] = set()
     params = dict(params or {})
-    params["per_page"] = 100
+    params["per_page"] = CENSUS_PER_PAGE
     page = 1
+    seen_pages: set[Any] = set()
+    api_total: int | None = None
+    used_bytes = 0
+    truncated = False
     async with httpx.AsyncClient() as client:
         while True:
+            # Anti-stall guard: if the API hands back a next_page we've already
+            # fetched (or one that doesn't advance), stop rather than loop forever.
+            if page in seen_pages:
+                break
+            seen_pages.add(page)
+
             params["page"] = page
             url = f"{CENSUS_BASE_URL}{endpoint}"
             response = await client.request(
@@ -93,12 +149,48 @@ async def census_request_all_pages(
             if not isinstance(data, list):
                 # Not a paginated list payload — return the raw response unchanged.
                 return result
-            all_items.extend(data)
-            next_page = (result.get("pagination") or {}).get("next_page")
+
+            pagination = result.get("pagination") or {}
+            if isinstance(pagination.get("total_records"), int):
+                api_total = pagination["total_records"]
+
+            # Slim each record and enforce the overall byte budget.
+            for record in data:
+                slim, dropped = _slim_record(record)
+                dropped_fields.update(dropped)
+                used_bytes += len(json.dumps(slim, default=str))
+                if used_bytes > CENSUS_MAX_RESPONSE_BYTES:
+                    truncated = True
+                    break
+                all_items.append(slim)
+            if truncated:
+                break
+
+            next_page = pagination.get("next_page")
             if not next_page:
                 break
+            if len(seen_pages) >= CENSUS_MAX_PAGES:
+                truncated = True
+                break
             page = next_page
-    return {"status": "success", "total_records": len(all_items), "data": all_items}
+
+    out: dict[str, Any] = {
+        "status": "success",
+        "total_records": api_total if api_total is not None else len(all_items),
+        "returned_records": len(all_items),
+        "data": all_items,
+    }
+    if dropped_fields:
+        out["fields_omitted_for_size"] = sorted(dropped_fields)
+    if truncated or (api_total is not None and api_total > len(all_items)):
+        out["truncated"] = True
+    if out.get("truncated") or dropped_fields:
+        out["note"] = (
+            f"Returned {len(all_items)} of {out['total_records']} records; "
+            "large nested fields were omitted to stay within response limits. "
+            "Use the detail tools (e.g. census_get_sync) for a specific record's full config."
+        )
+    return out
 
 
 # Path params used by Census tools that aren't already in server.py's PARAM_DEFINITIONS.
